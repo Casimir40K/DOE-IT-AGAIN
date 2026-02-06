@@ -15,41 +15,52 @@ function C = allcomb(varargin)
     args = varargin;
     n = numel(args);
     
-    % Convert all inputs to cells for uniform handling
+    % Get sizes
+    sizes = zeros(1, n);
     for i = 1:n
-        if ~iscell(args{i})
-            args{i} = num2cell(args{i}(:)');
+        if isstring(args{i}) || ischar(args{i})
+            args{i} = string(args{i}(:));  % Ensure column vector of strings
         end
+        sizes(i) = numel(args{i});
     end
     
-    % Get sizes
-    sizes = cellfun(@numel, args);
     nRows = prod(sizes);
     
-    % Generate combinations using ndgrid
-    [F{1:n}] = ndgrid(1:sizes(1), 1:sizes(2:end));
+    % Handle edge case
+    if nRows == 0
+        if isstring(args{1})
+            C = strings(0, n);
+        else
+            C = zeros(0, n);
+        end
+        return;
+    end
     
-    % Build output
-    if isstring(varargin{1})
+    % Generate combinations using ndgrid
+    grids = cell(1, n);
+    [grids{:}] = ndgrid(1:sizes(1), 1:sizes(2:end));
+    
+    % Build output based on first argument type
+    if isstring(args{1})
         % String output
         C = strings(nRows, n);
         for i = 1:n
-            idx = F{i}(:);
-            C(:,i) = string(args{i}(idx));
+            idx = grids{i}(:);
+            C(:, i) = args{i}(idx);
         end
-    elseif isnumeric(varargin{1})
+    elseif isnumeric(args{1})
         % Numeric output
         C = zeros(nRows, n);
         for i = 1:n
-            idx = F{i}(:);
-            C(:,i) = [args{i}{idx}];
+            idx = grids{i}(:);
+            C(:, i) = args{i}(idx);
         end
     else
         % Cell output
         C = cell(nRows, n);
         for i = 1:n
-            idx = F{i}(:);
-            C(:,i) = args{i}(idx)';
+            idx = grids{i}(:);
+            C(:, i) = args{i}(idx);
         end
     end
 end

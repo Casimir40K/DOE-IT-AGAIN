@@ -316,54 +316,101 @@ function Xc = generateDesignMatrix(designType, kCont, cfg)
             if kCont == 0
                 error('DOE:NoFactors', 'CCD requires at least 1 continuous factor.');
             end
-            requireStatsToolbox('CCD (ccdesign)');
             
             % Handle alpha parameter
             if isstring(cfg.design.ccd.alpha) || ischar(cfg.design.ccd.alpha)
                 alphaStr = lower(char(string(cfg.design.ccd.alpha)));
                 switch alphaStr
                     case 'rotatable'
-                        alphaArg = sqrt(kCont);
+                        alphaVal = sqrt(kCont);
                     case 'orthogonal'
-                        alphaArg = 'o';  % orthogonal
+                        alphaVal = (kCont * (1 + sqrt(1 + 8*kCont)) / 4)^0.25;
                     case 'face'
-                        alphaArg = 1;
+                        alphaVal = 1;
                     otherwise
-                        alphaArg = sqrt(kCont);  % default rotatable
+                        alphaVal = sqrt(kCont);  % default rotatable
                 end
             else
-                alphaArg = cfg.design.ccd.alpha;
+                alphaVal = cfg.design.ccd.alpha;
             end
             
             % Center points
             cp = max(0, round(cfg.design.centerPoints));
             
-            % Try new syntax first, fall back to old syntax
-            try
-                % New MATLAB syntax (R2020a+)
-                Xc = ccdesign(kCont, ...
-                    'Alpha', alphaArg, ...
-                    'Center', [cp cp], ...
-                    'Type', char(cfg.design.ccd.facetype));
-            catch ME
-                % Old MATLAB syntax (pre-R2020a)
+            % Try to use ccdesign if available, otherwise build manually
+            useManualCCD = false;
+            
+            if exist('ccdesign', 'file') == 2
+                % Try multiple ccdesign syntaxes for compatibility
+                ccdSuccess = false;
+                
+                % Method 1: Name-value pairs (Capital - newer MATLAB)
                 try
-                    Xc = ccdesign(kCont, alphaArg, char(cfg.design.ccd.facetype), [cp cp]);
-                catch ME2
-                    error('DOE:CCDFailed', ...
-                        'Failed to create CCD design. Error: %s', ME2.message);
+                    Xc = ccdesign(kCont, 'Alpha', alphaVal, 'Center', [cp cp], ...
+                        'Type', char(cfg.design.ccd.facetype));
+                    ccdSuccess = true;
+                catch
+                    % Method 2: Name-value pairs (lowercase - older MATLAB)
+                    try
+                        Xc = ccdesign(kCont, 'alpha', alphaVal, 'center', [cp cp], ...
+                            'type', char(cfg.design.ccd.facetype));
+                        ccdSuccess = true;
+                    catch
+                        % Method 3: Mixed positional and name-value
+                        try
+                            Xc = ccdesign(kCont, char(cfg.design.ccd.facetype), ...
+                                'alpha', alphaVal, 'center', [cp cp]);
+                            ccdSuccess = true;
+                        catch
+                            % ccdesign exists but syntax failed, use manual
+                            useManualCCD = true;
+                        end
+                    end
                 end
+            else
+                % ccdesign not available, use manual
+                useManualCCD = true;
+            end
+            
+            % Manual CCD builder (fallback)
+            if useManualCCD
+                fprintf('  Using manual CCD builder (ccdesign unavailable or incompatible)\n');
+                
+                % Factorial points: 2^k corners
+                Xf = 2 * fullfact(2 * ones(1, kCont)) - 3;  % {-1, +1}
+                
+                % Axial points: ±alpha along each axis
+                Xa = zeros(2 * kCont, kCont);
+                for i = 1:kCont
+                    Xa(2*i-1, i) = -alphaVal;
+                    Xa(2*i, i) = alphaVal;
+                end
+                
+                % Center points
+                Xcp = zeros(cp, kCont);
+                
+                % Combine all points
+                Xc = [Xf; Xa; Xcp];
+                
+                fprintf('  Manual CCD: %d factorial + %d axial + %d center = %d total\n', ...
+                    size(Xf,1), size(Xa,1), cp, size(Xc,1));
             end
             
         case "boxbehnken"
             if kCont < 3
                 error('DOE:TooFewFactors', 'Box-Behnken requires >= 3 continuous factors.');
             end
-            requireStatsToolbox('Box-Behnken (bbdesign)');
             
-            Xc = bbdesign(kCont);
-            if cfg.design.centerPoints > 0
-                Xc = [Xc; zeros(cfg.design.centerPoints, kCont)];
+            if exist('bbdesign', 'file') == 2
+                Xc = bbdesign(kCont);
+                if cfg.design.centerPoints > 0
+                    Xc = [Xc; zeros(cfg.design.centerPoints, kCont)];
+                end
+            else
+                error('DOE:MissingToolbox', ...
+                    ['Box-Behnken design requires Statistics and Machine Learning Toolbox.\n' ...
+                     'The bbdesign function was not found.\n' ...
+                     'Try using type=''ccd'' or type=''fullfact'' instead.']);
             end
             
         case "lhs"
@@ -384,20 +431,26 @@ function C = generateCategoricalCombinations(factors, idxCat)
     % Generate all combinations of categorical levels
     kCat = numel(idxCat);
     
-    if kCat > 0
-        catLevels = cell(1, kCat);
-        for j = 1:kCat
-            lv = factors(idxCat(j)).levels;
-            if isstring(lv) || ischar(lv)
-                catLevels{j} = string(lv(:));
-            else
-                catLevels{j} = lv(:);
-            end
-        end
-        C = allcomb(catLevels{:});
-    else
+    if kCat == 0
         C = strings(1, 0);
+        return;
     end
+    
+    catLevels = cell(1, kCat);
+    for j = 1:kCat
+        lv = factors(idxCat(j)).levels;
+        % Ensure we have a string vector
+        if isstring(lv) || ischar(lv)
+            catLevels{j} = string(lv(:));
+        elseif iscell(lv)
+            catLevels{j} = string(lv(:));
+        else
+            catLevels{j} = string(lv(:));
+        end
+    end
+    
+    % Use allcomb to generate combinations
+    C = allcomb(catLevels{:});
 end
 
 function [Xnew, Cnew] = crossDesigns(X, C, kCont, kCat)
@@ -536,14 +589,4 @@ function runSheet = randomizeRuns(runSheet, seed)
     end
     
     runSheet = runSheet(idxAll, :);
-end
-
-function requireStatsToolbox(featureName)
-    % Check if Statistics and Machine Learning Toolbox is available
-    
-    if ~(exist('ccdesign', 'file') == 2 || exist('bbdesign', 'file') == 2)
-        error('DOE:MissingToolbox', ...
-            'This design requires Statistics and Machine Learning Toolbox (%s).', ...
-            featureName);
-    end
 end
