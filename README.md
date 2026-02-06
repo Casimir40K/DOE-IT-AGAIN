@@ -55,6 +55,7 @@ factors = [
 % 2. Create the DOE
 [design, report, cfg] = createDOE(factors, ...
     'type', 'ccd', ...
+    'title', 'Temperature Optimization', ...  % Optional: custom display title
     'exportCSV', true);
 
 % 3. View the results
@@ -134,16 +135,18 @@ Factorial + axial points + center points for response surface modeling.
     'centerPoints', 6);
 ```
 
-**Best for:**
+**Best for:** 
 - Response surface methodology
 - Quadratic models
 - Optimization studies
 
 **Alpha options:**
-- `'rotatable'` - Equal prediction variance at equal distances from center
+- `'rotatable'` - Equal prediction variance at equal distances from center (alpha = sqrt(k))
 - `'orthogonal'` - Minimizes correlation between coefficients
 - `'face'` - Axial points on cube faces (alpha = 1)
 - Numeric value - Custom alpha distance
+
+**Note:** The code automatically handles different MATLAB versions' ccdesign syntax.
 
 #### 4. Box-Behnken Design (`'boxbehnken'`)
 Efficient design for quadratic models (requires ≥3 factors).

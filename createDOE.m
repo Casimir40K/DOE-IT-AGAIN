@@ -27,6 +27,9 @@ function [design, report, cfg] = createDOE(factors, varargin)
 %           lhsSamples     - Number of LHS samples (default: 30)
 %           lhsCriterion   - LHS criterion: 'maximin', 'correlation', etc.
 %
+%       Display:
+%           title          - Display title for headers (default: project name or 'DOE')
+%
 %       Export:
 %           projectName    - Project name (default: 'DOE_Project')
 %           owner          - Owner name
@@ -73,6 +76,7 @@ addParameter(p, "constraints", {}, @iscell);
 
 % Project/export
 addParameter(p, "projectName", "DOE_Project");
+addParameter(p, "title", "");  % Display title
 addParameter(p, "owner", "");
 addParameter(p, "notes", "");
 addParameter(p, "exportFolder", "");
@@ -89,6 +93,15 @@ cfg.project.name      = string(S.projectName);
 cfg.project.owner     = string(S.owner);
 cfg.project.createdOn = datetime("now");
 cfg.project.notes     = string(S.notes);
+
+% Set display title - use provided title, else project name, else 'DOE'
+if strlength(string(S.title)) > 0
+    cfg.project.displayTitle = string(S.title);
+elseif strlength(string(S.projectName)) > 0 && ~strcmp(S.projectName, "DOE_Project")
+    cfg.project.displayTitle = string(S.projectName);
+else
+    cfg.project.displayTitle = "DOE";
+end
 
 cfg.factors = factors;
 
@@ -126,6 +139,10 @@ cfg.export.writeCSV = S.exportCSV;
 cfg.export.writeMAT = S.exportMAT;
 
 %% Create DOE
+fprintf('\n');
+fprintf('========================================\n');
+fprintf('%s\n', upper(char(cfg.project.displayTitle)));
+fprintf('========================================\n');
 fprintf('Creating %s design...\n', upper(char(cfg.design.type)));
 [design, report] = buildDOE(cfg);
 
@@ -202,6 +219,7 @@ function [design, report] = buildDOE(cfg)
     design.cfg      = cfg;
     
     report = struct();
+    report.title       = cfg.project.displayTitle;
     report.project     = cfg.project.name;
     report.designType  = upper(string(cfg.design.type));
     report.nRuns       = height(runSheet);
@@ -214,7 +232,7 @@ function [design, report] = buildDOE(cfg)
     
     report.summaryText = sprintf([ ...
         '\n========================================\n' ...
-        'DOE SUMMARY\n' ...
+        '%s - SUMMARY\n' ...
         '========================================\n' ...
         'Project: %s\n' ...
         'Design type: %s\n' ...
@@ -226,6 +244,7 @@ function [design, report] = buildDOE(cfg)
         'Randomized: %s\n' ...
         'Build time: %.3f s\n' ...
         '========================================\n'], ...
+        upper(char(cfg.project.displayTitle)), ...
         report.project, report.designType, ...
         report.kCont, report.kCat, report.nRuns, ...
         report.blocks, report.replicates, ...
@@ -301,19 +320,40 @@ function Xc = generateDesignMatrix(designType, kCont, cfg)
             
             % Handle alpha parameter
             if isstring(cfg.design.ccd.alpha) || ischar(cfg.design.ccd.alpha)
-                alphaArg = char(string(cfg.design.ccd.alpha));
+                alphaStr = lower(char(string(cfg.design.ccd.alpha)));
+                switch alphaStr
+                    case 'rotatable'
+                        alphaArg = sqrt(kCont);
+                    case 'orthogonal'
+                        alphaArg = 'o';  % orthogonal
+                    case 'face'
+                        alphaArg = 1;
+                    otherwise
+                        alphaArg = sqrt(kCont);  % default rotatable
+                end
             else
                 alphaArg = cfg.design.ccd.alpha;
             end
             
             % Center points
             cp = max(0, round(cfg.design.centerPoints));
-            centerVec = [cp cp];
             
-            Xc = ccdesign(kCont, ...
-                'alpha', alphaArg, ...
-                'center', centerVec, ...
-                'type', char(cfg.design.ccd.facetype));
+            % Try new syntax first, fall back to old syntax
+            try
+                % New MATLAB syntax (R2020a+)
+                Xc = ccdesign(kCont, ...
+                    'Alpha', alphaArg, ...
+                    'Center', [cp cp], ...
+                    'Type', char(cfg.design.ccd.facetype));
+            catch ME
+                % Old MATLAB syntax (pre-R2020a)
+                try
+                    Xc = ccdesign(kCont, alphaArg, char(cfg.design.ccd.facetype), [cp cp]);
+                catch ME2
+                    error('DOE:CCDFailed', ...
+                        'Failed to create CCD design. Error: %s', ME2.message);
+                end
+            end
             
         case "boxbehnken"
             if kCont < 3

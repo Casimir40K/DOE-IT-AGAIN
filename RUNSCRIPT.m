@@ -108,7 +108,7 @@ fprintf('========================================\n\n');
 
 [design, report, cfg] = createDOE(factors, ...
     'type', 'ccd', ...                    % Central Composite Design
-    'ccdAlpha', 2, ...                    % Rotatable design (alpha = 2)
+    'ccdAlpha', 'rotatable', ...          % Rotatable design (alpha = sqrt(k))
     'ccdFaceType', 'circumscribed', ...   % Face-centered, inscribed, or circumscribed
     'centerPoints', 6, ...                % Number of center points (recommended: 3-6)
     'replicates', 1, ...                  % Number of complete replicates
@@ -116,6 +116,7 @@ fprintf('========================================\n\n');
     'randomize', true, ...                % Randomize run order
     'randomSeed', 42, ...                 % For reproducibility
     'constraints', constraints, ...       % Apply any constraints
+    'title', 'Lithium Formate Synthesis', ...  % Display title
     'projectName', 'LithiumFormate_CCD', ...
     'owner', 'YourName', ...              % Add your name here
     'notes', 'CCD design for lithium formate synthesis optimization', ...
@@ -167,8 +168,9 @@ fprintf('========================================\n\n');
 %
 % With 3 categorical levels (Mode), total runs = (24 + center) * 3
 %
-% Alpha = 2 creates a "rotatable" design where prediction variance
-% depends only on distance from center, not direction
+% Alpha = 'rotatable' creates a rotatable design where prediction variance
+% depends only on distance from center, not direction. For 4 factors,
+% this means alpha = sqrt(4) = 2.
 %
 % TIPS:
 %   - Start with 1 replicate to minimize experiments
