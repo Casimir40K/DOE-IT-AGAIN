@@ -2,8 +2,6 @@
 
 A single-file MATLAB function for generating experimental designs. No Statistics Toolbox required — every design generator is built from scratch.
 
-Written with substantial help from Claude (Anthropic). If something is elegant, that's probably Claude. If something is oddly specific to lithium formate leaching, that's me.
-
 ## What it does
 
 `createDOE` takes a list of factors (continuous, categorical, or both), a design type, and some options, and returns a randomised run-sheet as a MATLAB table. It handles the crossing of categorical and continuous factors, coded-to-actual value mapping, blocking, replication, constraints, and CSV/MAT export.
@@ -24,7 +22,7 @@ Supported designs:
 | File | What it is |
 |------|------------|
 | `createDOE.m` | The function. This is the only file you need. |
-| `RUNSCRIPT.m` | Example: lithium formate synthesis DOE (CCD + categorical). |
+| `RUNSCRIPT.m` | Example script for personal project. |
 | `QuickReference.m` | Copy-pasteable recipes for common design patterns. |
 | `test_createDOE.m` | 22 automated tests. Run this first if you're sceptical. |
 | `README.md` | You're here. |
