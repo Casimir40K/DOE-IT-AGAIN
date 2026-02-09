@@ -1,355 +1,157 @@
-# Design of Experiments (DOE) Builder for MATLAB
+# DOE Builder for MATLAB
 
-A comprehensive MATLAB toolkit for creating, exporting, and visualizing Design of Experiments (DOE) for process optimization and research.
+A single-file MATLAB function for generating experimental designs. No Statistics Toolbox required — every design generator is built from scratch.
 
-## 📋 Overview
+Written with substantial help from Claude (Anthropic). If something is elegant, that's probably Claude. If something is oddly specific to lithium formate leaching, that's me.
 
-This toolkit provides a streamlined way to create various experimental designs including:
-- Full Factorial
-- Fractional Factorial
-- Central Composite Design (CCD)
-- Box-Behnken Design
-- Latin Hypercube Sampling (LHS)
+## What it does
 
-**Key Features:**
-- Mix continuous and categorical factors
-- Apply custom constraints
-- Automatic randomization and blocking
-- Export to CSV and MAT formats
-- Built-in visualization tools
-- Fully reproducible designs
+`createDOE` takes a list of factors (continuous, categorical, or both), a design type, and some options, and returns a randomised run-sheet as a MATLAB table. It handles the crossing of categorical and continuous factors, coded-to-actual value mapping, blocking, replication, constraints, and CSV/MAT export.
 
-## 📁 Files Included
+Supported designs:
 
-1. **createDOE.m** - Main function to create DOE designs
-2. **allcomb.m** - Helper function for Cartesian products
-3. **doe_export.m** - Export designs to CSV/MAT files
-4. **doe_visualize.m** - Visualization tools
-5. **RUNSCRIPT.m** - Example script for lithium formate synthesis DOE
-6. **README.md** - This file
+| Design | Alias(es) | Minimum factors | Use case |
+|--------|-----------|-----------------|----------|
+| Full factorial | `fullfact`, `ff`, `factorial` | 1 continuous or 1 categorical | Complete coverage, few factors |
+| Fractional factorial | `fracfact`, `frac` | 1 continuous | Screening, many factors |
+| Central Composite (CCD) | `ccd`, `ccdesign` | 1 continuous | Response surface / quadratic models |
+| Box–Behnken | `bbd`, `boxbehnken`, `bb` | 3 continuous | Response surface, fewer runs than CCD |
+| Plackett–Burman | `pbdesign`, `pb`, `plackett` | 1 continuous | Main-effects-only screening |
+| Latin Hypercube | `lhs`, `latinhypercube` | 1 continuous | Computer experiments, space-filling |
 
-## 🚀 Quick Start
+## Files
 
-### Basic Usage
+| File | What it is |
+|------|------------|
+| `createDOE.m` | The function. This is the only file you need. |
+| `RUNSCRIPT.m` | Example: lithium formate synthesis DOE (CCD + categorical). |
+| `QuickReference.m` | Copy-pasteable recipes for common design patterns. |
+| `test_createDOE.m` | 22 automated tests. Run this first if you're sceptical. |
+| `README.md` | You're here. |
+
+## Quick start
 
 ```matlab
-% 1. Define your factors
-factors = [
-    struct('name', 'Temperature', ...
-           'type', 'continuous', ...
-           'low', 60, ...
-           'high', 90, ...
-           'units', 'degC', ...
-           'levels', [], ...
-           'transform', 'none')
-    
-    struct('name', 'Catalyst', ...
-           'type', 'categorical', ...
-           'levels', ["A", "B", "C"], ...
-           'low', [], ...
-           'high', [], ...
-           'units', '-', ...
-           'transform', 'none')
-];
+% Two continuous factors, full factorial
+factors = [ struct('name','Temp','type','continuous','low',60,'high',90)
+            struct('name','Time','type','continuous','low',30,'high',180) ];
 
-% 2. Create the DOE
-[design, report, cfg] = createDOE(factors, ...
-    'type', 'ccd', ...
-    'title', 'Temperature Optimization', ...  % Optional: custom display title
-    'exportCSV', true);
-
-% 3. View the results
-disp(report.summaryText);
+[design, report] = createDOE(factors, 'type','fullfact');
 disp(design.runSheet);
-
-% 4. Visualize
-doe_visualize(design, factors);
 ```
 
-## 📖 Detailed Usage
+## Defining factors
 
-### Factor Definition
-
-Each factor requires a struct with these fields:
-
-**Continuous Factors:**
-```matlab
-struct('name', 'FactorName', ...      % String identifier
-       'type', 'continuous', ...       % Factor type
-       'low', 10, ...                  % Lower bound
-       'high', 50, ...                 % Upper bound
-       'units', 'degC', ...            % Units (for display)
-       'levels', [], ...               % Leave empty
-       'transform', 'none')            % 'none', 'log', 'sqrt'
-```
-
-**Categorical Factors:**
-```matlab
-struct('name', 'FactorName', ...      % String identifier
-       'type', 'categorical', ...      % Factor type
-       'levels', ["A", "B", "C"], ... % Level names
-       'low', [], ...                  % Leave empty
-       'high', [], ...                 % Leave empty
-       'units', '-', ...               % Units (typically '-')
-       'transform', 'none')            % Leave as 'none'
-```
-
-### Design Types
-
-#### 1. Full Factorial (`'fullfact'`)
-Tests all combinations of factor levels.
+Continuous factors need `name`, `type`, `low`, and `high`. Categorical factors need `name`, `type`, and `levels`. The `units` field is optional (defaults to `'-'`).
 
 ```matlab
-[design, report, cfg] = createDOE(factors, ...
-    'type', 'fullfact', ...
-    'centerPoints', 3);
+% All-continuous — struct array is fine
+factors = [ struct('name','Temp', 'type','continuous', 'low',60, 'high',90)
+            struct('name','Conc', 'type','continuous', 'low',0.1,'high',1.0) ];
 ```
 
-**Best for:** 
-- 2-4 factors
-- Small experiments
-- Complete coverage
-
-#### 2. Fractional Factorial (`'fracfact'`)
-Tests a fraction of all combinations using confounding.
+When mixing categorical and continuous factors, use a **cell array** instead of a struct array. MATLAB won't let you concatenate structs with different fields, and categorical factors don't have `low`/`high` while continuous ones don't have `levels`. The function normalises everything internally.
 
 ```matlab
-[design, report, cfg] = createDOE(factors, ...
-    'type', 'fracfact', ...
-    'fracGenerators', 'a b c abc');
+% Mixed — use a cell array
+factors = {
+    struct('name','Catalyst', 'type','categorical', 'levels',["A","B","C"])
+    struct('name','Temp',     'type','continuous',   'low',60, 'high',90)
+    struct('name','Time',     'type','continuous',   'low',30, 'high',180)
+};
 ```
 
-**Best for:**
-- Screening many factors
-- Limited resources
-- Main effects + some interactions
+## Options
 
-#### 3. Central Composite Design (`'ccd'`)
-Factorial + axial points + center points for response surface modeling.
+Pass these as name-value pairs after the factors argument.
+
+**Design control:**
+
+| Parameter | Default | Notes |
+|-----------|---------|-------|
+| `'type'` | `'fullfact'` | See the table above for aliases |
+| `'centerPoints'` | `0` | Added to the base design before crossing with categoricals |
+| `'replicates'` | `1` | Complete replicates of the whole design |
+| `'numBlocks'` | `1` | Sequential split into blocks |
+| `'randomize'` | `true` | Shuffles within each block |
+| `'randomSeed'` | `42` | For reproducibility |
+
+**Design-specific:**
+
+| Parameter | Applies to | Default | Notes |
+|-----------|-----------|---------|-------|
+| `'ccdAlpha'` | CCD | `'rotatable'` | Also accepts `'face'`, `'orthogonal'`, or a number |
+| `'fracGenerators'` | Fractional factorial | `''` | e.g. `'a b c abc'` for a 2^(4-1) design |
+| `'lhsSamples'` | LHS | `50` | Number of sample points |
+| `'lhsMaxIter'` | LHS | `20` | Maximin optimisation iterations |
+
+**Constraints:**
 
 ```matlab
-[design, report, cfg] = createDOE(factors, ...
-    'type', 'ccd', ...
-    'ccdAlpha', 'rotatable', ...  % or 'orthogonal', 'face', or numeric
-    'ccdFaceType', 'circumscribed', ...
-    'centerPoints', 6);
+% Cell array of functions. Each receives the run-sheet table,
+% returns a logical vector: true = keep, false = discard.
+constraints = { @(T) ~(T.Temp > 85 & T.Conc > 0.9) };
+
+[d,r] = createDOE(factors, 'type','ccd', 'constraints',constraints);
 ```
 
-**Best for:** 
-- Response surface methodology
-- Quadratic models
-- Optimization studies
+**Export and metadata:**
 
-**Alpha options:**
-- `'rotatable'` - Equal prediction variance at equal distances from center (alpha = sqrt(k))
-- `'orthogonal'` - Minimizes correlation between coefficients
-- `'face'` - Axial points on cube faces (alpha = 1)
-- Numeric value - Custom alpha distance
+| Parameter | Default | Notes |
+|-----------|---------|-------|
+| `'projectName'` | `'DOE_Project'` | Used for filenames |
+| `'title'` | same as projectName | Display title in console output |
+| `'owner'` | `''` | Stored in metadata |
+| `'notes'` | `''` | Stored in metadata |
+| `'exportFolder'` | `'./DOE_Output'` | Created if it doesn't exist |
+| `'exportCSV'` | `false` | Writes `<projectName>_runsheet.csv` |
+| `'exportMAT'` | `false` | Writes `<projectName>_bundle.mat` |
+| `'responses'` | `{'Response1','Response2'}` | Column names for response placeholders |
 
-**Note:** The code automatically handles different MATLAB versions' ccdesign syntax.
-
-#### 4. Box-Behnken Design (`'boxbehnken'`)
-Efficient design for quadratic models (requires ≥3 factors).
+## What you get back
 
 ```matlab
-[design, report, cfg] = createDOE(factors, ...
-    'type', 'boxbehnken', ...
-    'centerPoints', 5);
+[design, report, cfg] = createDOE(factors, ...);
 ```
 
-**Best for:**
-- 3+ factors
-- Avoiding extreme combinations
-- Quadratic models with fewer runs than CCD
+`design.runSheet` is a MATLAB table with columns: `Run`, `Block`, `Replicate`, then actual-value columns for each factor, coded-value columns (`*_coded`) for continuous factors, categorical columns, and NaN-filled response placeholders.
 
-#### 5. Latin Hypercube Sampling (`'lhs'`)
-Space-filling design for computer experiments.
+`report` is a struct with `nRuns`, `designType`, `kCont`, `kCat`, `summaryText`, etc.
+
+`cfg` is the full configuration — enough to reproduce the design exactly.
+
+## CCD alpha values
+
+For the record, since this tripped me up and it'll trip you up too:
+
+| Alpha setting | Formula | k=2 | k=3 | k=4 |
+|---------------|---------|-----|-----|-----|
+| `'rotatable'` | (2^k)^(1/4) | 1.414 | 1.682 | 2.000 |
+| `'face'` | 1 | 1 | 1 | 1 |
+| `'orthogonal'` | (k(1+√(1+8k))/4)^(1/4) | varies | varies | varies |
+
+A lot of references (and the previous version of this code) use `sqrt(k)` for rotatable alpha, which only happens to be correct for k=4. The proper formula is `(2^k)^(1/4)`.
+
+## Requirements
+
+MATLAB R2019b or later. No toolboxes.
+
+The old version of this toolkit depended on `ccdesign`, `bbdesign`, and `lhsdesign` from the Statistics Toolbox. This version implements everything from scratch, so those functions are not needed. If you have the toolbox installed, it won't interfere — nothing from it is called.
+
+## Running the tests
 
 ```matlab
-[design, report, cfg] = createDOE(factors, ...
-    'type', 'lhs', ...
-    'lhsSamples', 50, ...
-    'lhsCriterion', 'maximin');
+test_createDOE
 ```
 
-**Best for:**
-- Computer simulations
-- Many factors
-- Uniform space coverage
+This runs 22 tests covering every design type, edge cases (single-factor CCD, categorical-only designs), constraint filtering, replication, blocking, randomisation reproducibility, and coded-to-actual mapping. It prints a pass/fail count at the end.
 
-### Advanced Features
+## References
 
-#### Constraints
-Exclude infeasible combinations:
+- Montgomery, D.C. (2017). *Design and Analysis of Experiments*, 9th ed. Wiley.
+- Box, G.E.P., Hunter, J.S., & Hunter, W.G. (2005). *Statistics for Experimenters*, 2nd ed. Wiley.
+- Myers, R.H., Montgomery, D.C., & Anderson-Cook, C.M. (2016). *Response Surface Methodology*, 4th ed. Wiley.
 
-```matlab
-constraints = {};
+## Licence
 
-% Temperature constraint
-constraints{1} = @(T) T.Temperature <= 85 | T.Pressure <= 10;
-
-% Categorical constraint
-constraints{2} = @(T) ~(strcmp(T.Catalyst, "Expensive") & T.Time > 120);
-
-[design, report, cfg] = createDOE(factors, ...
-    'constraints', constraints);
-```
-
-#### Blocking
-Organize runs into blocks (e.g., different days/batches):
-
-```matlab
-[design, report, cfg] = createDOE(factors, ...
-    'numBlocks', 3, ...
-    'blockingMethod', 'sequential');  % or 'random'
-```
-
-#### Replicates
-Add complete replicates for better error estimation:
-
-```matlab
-[design, report, cfg] = createDOE(factors, ...
-    'replicates', 3);
-```
-
-#### Randomization
-Control run order randomization:
-
-```matlab
-[design, report, cfg] = createDOE(factors, ...
-    'randomize', true, ...
-    'randomSeed', 42);  % For reproducibility
-```
-
-## 📊 Outputs
-
-### design struct
-```matlab
-design.runSheet  % Table with all runs
-design.meta      % Project metadata
-design.cfg       % Configuration (for reproducibility)
-```
-
-### runSheet columns
-- `Run` - Run number (randomized order)
-- `FactorName_coded` - Coded values (-1 to +1) for continuous factors
-- `FactorName` - Actual values for continuous factors
-- `CategoricalName` - Levels for categorical factors
-- `Block` - Block assignment
-- `Replicate` - Replicate number
-- `Response1`, `Response2` - Placeholders for experimental results
-
-### report struct
-```matlab
-report.project      % Project name
-report.designType   % Design type used
-report.nRuns        % Total number of runs
-report.kCont        % Number of continuous factors
-report.kCat         % Number of categorical factors
-report.blocks       % Number of blocks
-report.replicates   % Number of replicates
-report.summaryText  % Formatted summary
-```
-
-## 📁 Export Options
-
-```matlab
-[design, report, cfg] = createDOE(factors, ...
-    'exportFolder', './MyResults', ...
-    'exportBaseFilename', 'MyExperiment', ...
-    'exportCSV', true, ...  % Creates MyExperiment_runsheet.csv
-    'exportMAT', true);     % Creates MyExperiment_bundle.mat
-```
-
-**Output files:**
-- `*_runsheet.csv` - Run sheet for lab use
-- `*_bundle.mat` - Complete design + config for MATLAB
-
-## 📈 Visualization
-
-```matlab
-doe_visualize(design, factors);
-```
-
-**Creates:**
-- Histograms of continuous factor distributions
-- Pairwise scatter plots
-- 3D design space visualization (if 3+ factors)
-- Categorical factor level counts
-- Summary statistics
-
-## 💡 Example: Lithium Formate Synthesis
-
-See `RUNSCRIPT.m` for a complete example with:
-- 1 categorical factor (Mode: Co-only, Mn-only, Together)
-- 4 continuous factors (Temperature, Time, Concentration, S/L Ratio)
-- CCD with rotatable alpha
-- Constraint examples
-- Full visualization
-
-**To run:**
-```matlab
-RUNSCRIPT
-```
-
-## ⚙️ Requirements
-
-- MATLAB R2019b or later
-- **For CCD and Box-Behnken:** Statistics and Machine Learning Toolbox
-- **For other designs:** Base MATLAB only
-
-## 🔍 Tips & Best Practices
-
-1. **Start small:** Begin with 1 replicate and add more if needed
-2. **Center points:** 3-6 center points help detect curvature
-3. **Blocking:** Use blocks if experiments span multiple days/batches
-4. **Constraints:** Add constraints for safety or feasibility
-5. **Randomization:** Always randomize unless there's a specific reason not to
-6. **Coded values:** Use for balanced model fitting, actual values for interpretation
-
-## 🐛 Troubleshooting
-
-**Error: "Statistics and Machine Learning Toolbox required"**
-- Solution: Use 'fullfact', 'fracfact', or 'lhs' designs, or install the toolbox
-
-**Error: "Factor names must be unique"**
-- Solution: Check that all factor names are different
-
-**Error: "high > low required"**
-- Solution: Verify continuous factor ranges are valid
-
-**Too many runs generated:**
-- Solution: Use fractional factorial, add constraints, or reduce factor levels
-
-**Design doesn't match expectations:**
-- Solution: Check `design.runSheet` and verify factor definitions
-
-## 📚 References
-
-- Box, G. E., Hunter, J. S., & Hunter, W. G. (2005). Statistics for Experimenters
-- Montgomery, D. C. (2017). Design and Analysis of Experiments
-- Myers, R. H., Montgomery, D. C., & Anderson-Cook, C. M. (2016). Response Surface Methodology
-
-## 📄 License
-
-MIT License - Feel free to use and modify for your research.
-
-## 🤝 Contributing
-
-Suggestions and improvements welcome! Key areas:
-- Additional design types
-- More visualization options
-- Export to other formats
-- Integration with analysis tools
-
-## 📧 Support
-
-For issues or questions, please check:
-1. This README
-2. Function documentation (`help createDOE`)
-3. Example script (RUNSCRIPT.m)
-
----
-
-**Version:** 2.0  
-**Last Updated:** February 2026
+MIT. Do whatever you like with it.
