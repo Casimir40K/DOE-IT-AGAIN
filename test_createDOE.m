@@ -272,7 +272,7 @@ try
     % 2^4=16 + 2*4=8 + 6 = 30 per category × 3 = 90
     assert(r.nRuns == 90, 'Expected 90 runs, got %d', r.nRuns);
     assert(all(ismember(d.runSheet.Mode, ["Co-only","Mn-only","Together"])));
-    fprintf('TEST 15 PASS  (CCD+categorical lithium formate: %d runs)\n', r.nRuns);
+    fprintf('TEST 15 PASS  (CCD+categorical: %d runs)\n', r.nRuns);
     nPass = nPass+1;
 catch ME
     fprintf('TEST 15 FAIL  %s\n', ME.message); nFail = nFail+1;
