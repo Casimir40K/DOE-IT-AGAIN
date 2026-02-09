@@ -148,9 +148,10 @@ This runs 22 tests covering every design type, edge cases (single-factor CCD, ca
 
 ## References
 
-- Montgomery, D.C. (2017). *Design and Analysis of Experiments*, 9th ed. Wiley.
-- Box, G.E.P., Hunter, J.S., & Hunter, W.G. (2005). *Statistics for Experimenters*, 2nd ed. Wiley.
-- Myers, R.H., Montgomery, D.C., & Anderson-Cook, C.M. (2016). *Response Surface Methodology*, 4th ed. Wiley.
+- Montgomery, D.C. (2017). *Design and Analysis of Experiments*, 9th ed. Wiley. — The general-purpose DOE textbook. Covers factorial, fractional factorial, blocking, randomisation, and Plackett–Burman.
+- Myers, R.H., Montgomery, D.C., & Anderson-Cook, C.M. (2016). *Response Surface Methodology*, 4th ed. Wiley. — Specifically on CCD, Box–Behnken, alpha values, and rotatability.
+- Santner, T.J., Williams, B.J., & Notz, W.I. (2018). *The Design and Analysis of Computer Experiments*, 2nd ed. Springer. — Covers Latin Hypercube sampling and space-filling designs.
+- Anthropic. Claude (claude-opus-4-6). Used to write and debug the MATLAB implementation. https://claude.ai
 
 ## Licence
 
